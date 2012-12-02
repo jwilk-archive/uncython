@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+
+import argparse
+import re
+import sys
+
+extract_comments = re.compile(br'''
+^ [ ]* /[*] [ ] "([^"]+)":([0-9]+) $
+( .*? )
+^ [ ][*]/ $
+''', re.VERBOSE | re.MULTILINE | re.DOTALL).findall
+
+parse_marker = re.compile(br'''
+^ ( .*? ) \s+ [#] [  ] <<<<<<<<<<<<<< $
+''', re.VERBOSE).match
+
+class RecoveryError(Exception):
+    pass
+
+def main():
+    stdout = sys.stdout.buffer
+    ap = argparse.ArgumentParser()
+    ap.add_argument('source')
+    ap.add_argument('file', nargs='?')
+    options = ap.parse_args()
+    with open(options.source, 'rb') as file:
+        contents = file.read()
+    comments = extract_comments(contents)
+    if options.file is None:
+        files = frozenset(c[0].decode('ASCII') for c in comments)
+        for file in sorted(list(files)):
+            print(file)
+    else:
+        file_b = options.file.encode('ASCII')
+        code = {}
+        for comment in comments:
+            if comment[0] != file_b:
+                continue
+            n = int(comment[1])
+            k = None
+            local_code = []
+            for m, line in enumerate(comment[2].splitlines()):
+                if not line.startswith(b' * '):
+                    continue
+                line = line[3:]
+                match = parse_marker(line)
+                if match is not None:
+                    line = match.group(1)
+                    k = m
+                local_code += [line]
+            if k is None:
+                raise RecoveryError
+            for m, line in enumerate(local_code, n - k):
+                if m < 0:
+                    raise RecoveryError
+                try:
+                    if code[m] != line:
+                        raise RecoveryError
+                except KeyError:
+                    code[m] = line
+        i = 0
+        while code:
+            line = code.pop(i, b'# <uncython?>')
+            stdout.write(line)
+            stdout.write(b'\n')
+            i += 1
+
+if __name__ == '__main__':
+    main()
+
+# vim:ts=4 sw=4 et
