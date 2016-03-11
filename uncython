@@ -21,6 +21,8 @@
 # SOFTWARE.
 
 import argparse
+import collections
+import os
 import re
 import sys
 
@@ -28,11 +30,18 @@ extract_comments = re.compile(br'''
 ^ [ ]* /[*] [ ] "([^"]+)":([0-9]+) $
 ( .*? )
 ^ [ ][*]/ $
-''', re.VERBOSE | re.MULTILINE | re.DOTALL).findall
+''', re.VERBOSE | re.MULTILINE | re.DOTALL).finditer
 
 parse_marker = re.compile(br'''
 ^ ( .*? ) \s+ [#] [  ] <<<<<<<<<<<<<< $
 ''', re.VERBOSE).match
+
+def sanitize_path(path):
+    if os.path.__name__ != 'posixpath':
+        raise NotImplementedError
+    path = os.path.join('/', path)
+    path = os.path.normpath(path)
+    return path.lstrip('/')
 
 class RecoveryError(Exception):
     pass
@@ -40,26 +49,22 @@ class RecoveryError(Exception):
 def main():
     stdout = sys.stdout.buffer
     ap = argparse.ArgumentParser()
-    ap.add_argument('source')
-    ap.add_argument('file', nargs='?')
+    ap.add_argument('cfiles', metavar='CFILE', nargs='+')
+    ap.add_argument('-d', '--destdir', metavar='DESTDIR', required=True)
     options = ap.parse_args()
-    with open(options.source, 'rb') as file:
-        contents = file.read()
-    comments = extract_comments(contents)
-    if options.file is None:
-        files = frozenset(c[0].decode('ASCII') for c in comments)
-        for file in sorted(list(files)):
-            print(file)
-    else:
-        file_b = options.file.encode('ASCII')
-        code = {}
-        for comment in comments:
-            if comment[0] != file_b:
-                continue
-            n = int(comment[1])
-            k = None
+    sources = collections.defaultdict(dict)
+    for cpath in options.cfiles:
+        with open(cpath, 'rb') as cfile:
+            contents = cfile.read()
+        for match in extract_comments(contents):
+            pyxpath, n, lines = match.groups()
+            pyxpath = pyxpath.decode('ASCII')
+            pyxpath = sanitize_path(pyxpath)
+            source = sources[pyxpath]
+            n = int(n)
+            lines = lines.splitlines()
             local_code = []
-            for m, line in enumerate(comment[2].splitlines()):
+            for m, line in enumerate(lines):
                 if not line.startswith(b' * '):
                     continue
                 line = line[3:]
@@ -74,16 +79,20 @@ def main():
                 if m < 0:
                     raise RecoveryError
                 try:
-                    if code[m] != line:
+                    if source[m] != line:
                         raise RecoveryError
                 except KeyError:
-                    code[m] = line
-        i = 0
-        while code:
-            line = code.pop(i, b'# <uncython?>')
-            stdout.write(line)
-            stdout.write(b'\n')
-            i += 1
+                    source[m] = line
+    for pyxpath, source in sources.items():
+        pyxdir = os.path.dirname(pyxpath)
+        os.makedirs(pyxdir, exist_ok=True)
+        with open(pyxpath, 'wb') as pyxfile:
+            i = 0
+            while source:
+                line = source.pop(i, b'# <uncython could not extract this line>')
+                pyxfile.write(line)
+                pyxfile.write(b'\n')
+                i += 1
 
 if __name__ == '__main__':
     main()
