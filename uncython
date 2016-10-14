@@ -47,7 +47,6 @@ class RecoveryError(Exception):
     pass
 
 def main():
-    stdout = sys.stdout.buffer
     ap = argparse.ArgumentParser()
     ap.add_argument('cfiles', metavar='CFILE', nargs='+')
     ap.add_argument('-d', '--destdir', metavar='DESTDIR', required=True)
