@@ -24,7 +24,6 @@ import argparse
 import collections
 import os
 import re
-import sys
 
 extract_comments = re.compile(br'''
 ^ [ ]* /[*] [ ] "([^"]+)":([0-9]+) $
