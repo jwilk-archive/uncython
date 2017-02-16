@@ -32,7 +32,7 @@ extract_comments = re.compile(br'''
 ''', re.VERBOSE | re.MULTILINE | re.DOTALL).finditer
 
 parse_marker = re.compile(br'''
-^ ( .*? ) \s+ [#] [  ] <<<<<<<<<<<<<< $
+^ ( .*? ) \s+ [#] [ ] <<<<<<<<<<<<<< $
 ''', re.VERBOSE).match
 
 def sanitize_path(path):
