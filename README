@@ -5,4 +5,4 @@
 
 **uncython** tries to extract original Cython code from C files.
 
-.. vim:ts=3 sts=3 sw=3 et
+.. vim:ts=3 sts=3 sw=3 et ft=rst
